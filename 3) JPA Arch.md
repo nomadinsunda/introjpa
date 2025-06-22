@@ -5,6 +5,7 @@
 ---
 
 ## 🧱 1. JPA 전체 아키텍처 구성
+<img src="./images/jpa-architecture-0.png" width=90% /><br>
 
 JPA의 아키텍처는 아래와 같은 핵심 구성 요소로 이루어져 있습니다:
 
@@ -49,6 +50,8 @@ JPA의 아키텍처는 아래와 같은 핵심 구성 요소로 이루어져 있
 ---
 
 ## 🏗️ 3. JPA 클래스별 구조 및 역할
+<img src="./images/jpa-architecture-2.png" width=90% /><br>
+
 
 ### 📌 EntityManagerFactory
 
@@ -98,6 +101,7 @@ public class Student {
 ---
 
 ## 🧠 5. JPA의 영속성 컨텍스트 (Persistence Context)
+<img src="./images/jpa-architecture-3.png" width=90% /><br>
 
 * `EntityManager`에 의해 관리되는 **1차 캐시 공간**
 * **엔티티 객체들은 Persistence Context 내부에서 영속 상태로 존재**
@@ -142,21 +146,8 @@ JPA의 예외는 모두 **Unchecked Exception**으로 분류됩니다. 즉, 컴�
 | `Query`                | JPQL 기반 쿼리 실행                      |
 | `Transaction`          | `EntityManager`를 통해 제어             |
 
----
-
-## 📚 추천 학습 순서
-
-1. JPA 핵심 개념 이해 (본 포스트)
-2. `@Entity`로 테이블 매핑 실습
-3. JPQL 쿼리 작성법 익히기
-4. Fetch 전략, Cascade, Lazy Loading 등 고급 기능 익히기
-5. Spring Data JPA로 실전 적용
-
----
-
-💬 도움이 되셨다면 북마크와 공유 부탁드립니다.
-아키텍처 다이어그램이 필요하시다면, **시각화된 이미지로도 제작해드릴 수 있습니다**. 요청해주세요!
 
 
 
-<img src="./images/jpa-architecture-0.png" width=90% /><br>
+
+
