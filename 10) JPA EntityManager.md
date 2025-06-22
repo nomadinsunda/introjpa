@@ -1,4 +1,4 @@
-# JPA EntityManager 완전 정복
+# JPA EntityManager
 
 Java Persistence API(JPA)의 핵심 컴포넌트인 `EntityManager`는 영속성 컨텍스트(Persistence Context)를 통해 엔티티의 생명주기, 트랜잭션, 쿼리, 캐시 등을 전반적으로 관리하는 역할을 담당합니다. 이는 마치 객체와 데이터베이스 사이의 브리지 역할을 수행하며, 데이터베이스 작업의 추상화를 제공합니다.
 
@@ -109,7 +109,7 @@ em.close();
 
 ---
 
-# ✅ JPA의 Persistence Context 내부 구성 완전 정리
+# ✅ JPA의 Persistence Context 내부 구성
 
 `Persistence Context`는 간단히 말해 **EntityManager에 의해 관리되는 1차 캐시**입니다.
 하지만 내부적으로는 다음과 같은 **핵심 구성 요소**들이 존재하며, 이들이 유기적으로 동작하여 JPA의 영속성 관리 기능을 제공합니다.
