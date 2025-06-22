@@ -1,4 +1,4 @@
-# 🔐 JPA Identifier Property 완전 정복: 식별자 필드 설계와 동기화 전략
+# 🔐 JPA Identifier Property: 식별자 필드 설계와 동기화 전략
 
 > “엔티티의 식별자를 어떻게 정의하느냐가 곧 JPA의 동기화 전략과 객체 생명주기를 좌우한다.”
 
