@@ -1,0 +1,139 @@
+# 🔍 JPA의 N + 1 문제
+
+---
+
+## 🧭 개요: N + 1 문제란 무엇인가?
+
+**N + 1 문제**는 JPA 또는 ORM을 사용할 때 자주 발생하는 **성능 병목 현상**입니다. 특히 연관 관계(OneToMany, ManyToOne 등)를 가진 엔티티를 **JPQL로 조회할 때**, **지연 로딩(LAZY)** 전략과 맞물려 다음과 같은 현상이 벌어집니다:
+
+* **1**: 부모 엔티티를 1번 조회 (기본 쿼리)
+* **N**: 자식 엔티티 또는 연관된 엔티티를 각각 N번 개별 조회 (추가 쿼리 N번)
+
+> 이로 인해 총 N + 1개의 SQL 쿼리가 실행됩니다.
+
+---
+
+## 💡 예제로 이해하는 N + 1 문제
+
+### 👨‍👧 관계 모델
+
+```java
+@Entity
+public class Member {
+    @Id @GeneratedValue
+    private Long id;
+
+    private String name;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Team team;
+}
+
+@Entity
+public class Team {
+    @Id @GeneratedValue
+    private Long id;
+
+    private String name;
+}
+```
+
+### 🧪 문제 발생 코드
+
+```java
+List<Member> members = em.createQuery("select m from Member m", Member.class)
+                         .getResultList();
+
+for (Member member : members) {
+    System.out.println("팀 이름: " + member.getTeam().getName()); // N번의 SELECT
+}
+```
+
+### 📋 실행 로그 예시
+
+```sql
+select m from Member m; -- 1번
+select t from Team t where t.id = ?; -- N번 (각 멤버마다)
+```
+
+---
+
+## 🧨 왜 이런 일이 벌어지는가?
+
+JPA는 **지연 로딩(LAZY)** 전략을 통해 연관된 엔티티를 처음부터 로딩하지 않고, 필요할 때 쿼리를 날려 가져옵니다.
+
+> 즉, `member.getTeam()`을 호출하는 순간에 `Team`에 대한 SQL이 실행됩니다.
+
+문제는 `List<Member>`의 크기만큼 반복이 일어나면, `Team`을 매번 SQL로 조회하게 된다는 점입니다. 이것이 **N + 1**입니다.
+
+---
+
+## 📉 성능 영향
+
+* 데이터 수가 1000개면 → 1001번 SQL 실행
+* DB I/O 비용 증가
+* 대용량 트래픽 상황에서 **치명적인 병목** 유발
+
+---
+
+## 🛠 해결 방법
+
+### ✅ 1. `JOIN FETCH` 사용
+
+```java
+List<Member> members = em.createQuery(
+    "select m from Member m join fetch m.team", Member.class)
+    .getResultList();
+```
+
+* 지연 로딩 상태여도 `JOIN`과 동시에 연관된 엔티티까지 한 번에 조회
+* **단 1번의 쿼리로 모든 Member + Team을 가져옴**
+
+### ✅ 2. `@EntityGraph` 활용
+
+```java
+@EntityGraph(attributePaths = "team")
+List<Member> findAll();
+```
+
+* Spring Data JPA에서 자주 사용
+* JPQL을 수정하지 않아도 fetch join처럼 작동
+
+### ✅ 3. `BatchSize` 설정 (Hibernate 전용)
+
+```java
+@BatchSize(size = 10)
+@ManyToOne(fetch = FetchType.LAZY)
+private Team team;
+```
+
+* 1개의 쿼리에 여러 Team을 `IN` 절로 가져옴
+* 쿼리 수가 **N → N / batchSize**로 감소
+
+---
+
+## ⚠️ 주의사항
+
+* `join fetch`를 남용하면 **Cartesian Product**로 인해 데이터가 **중복** 조회될 수 있음
+* **컬렉션 페치 조인**은 **하나만 허용**되며, 페이징 처리가 어려움
+* 항상 성능 프로파일링을 통해 **쿼리 수와 실행 시간**을 체크해야 함
+
+---
+
+## 📌 결론
+
+| 구분     | 내용                                             |
+| ------ | ---------------------------------------------- |
+| 문제 원인  | 지연 로딩 상태에서 루프 돌며 SQL 다중 실행                     |
+| 발생 조건  | 연관 엔티티의 LAZY + get 호출                          |
+| 주요 증상  | `SELECT` 문 다발 발생 (N + 1)                       |
+| 해결 전략  | `JOIN FETCH`, `@EntityGraph`, `BatchSize` 설정 등 |
+| 최적화 기준 | 실제 사용량과 쿼리 빈도에 맞춘 Fetch 전략 조정                  |
+
+---
+
+## 🎓 실무 팁
+
+* 조회 전용 화면은 **JOIN FETCH**로 설계하되, 페이징과 혼용 여부에 유의
+* Lazy로 설정하고 필요 시 fetch join으로 **부분 최적화**하는 전략이 현실적
+* JPA 2.1 이상이면 `@NamedEntityGraph`, `@EntityGraph` 적극 활용
