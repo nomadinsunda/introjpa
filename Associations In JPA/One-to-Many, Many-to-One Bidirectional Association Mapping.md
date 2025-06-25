@@ -57,7 +57,7 @@ public class Employee {
 ```
 
 * `Employee`이 **외래 키(department_id)를 보유**하므로, JPA 입장에서 `Employee.department`가 **연관관계의 주인**입니다.
-* 반대로 `Department.employees`는 \*\*주인이 아닌 inverse side(비주인)\*\*입니다.
+* 반대로 `Department.employees`는 **주인이 아닌 inverse side(비주인 또는 반대편)**입니다.
 
 ---
 
