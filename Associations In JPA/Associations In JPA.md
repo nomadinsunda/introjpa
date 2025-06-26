@@ -49,6 +49,11 @@ class User {
     private List<PhoneNumber> phoneNumbers;
 }
 
+class PhoneNumber {
+    
+    private User user;
+}
+
 // Bidirectional
 class User {
     @OneToMany(mappedBy = "user")
