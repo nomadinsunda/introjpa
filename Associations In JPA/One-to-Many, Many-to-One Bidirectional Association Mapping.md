@@ -74,6 +74,8 @@ department.setName("개발부");
 Employee employee = new Employee();
 employee.setName("홍길동");
 
+employee.setDepartment(department); // DB 반영 됨.
+
 department.getEmployees().add(employee); // ❌ 주인이 아님. DB 반영 안 됨
 
 em.persist(department);
