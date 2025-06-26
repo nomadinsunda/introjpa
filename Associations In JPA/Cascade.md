@@ -1,192 +1,117 @@
-# 🔄 JPA Cascade (영속성 전이)
+# 📌 JPA의 Cascade란?
 
-## ✅ 1. 개념 정의: Cascade란 무엇인가?
+> \*\*Cascade(영속성 전이)\*\*란, **특정 엔티티에 수행한 영속성 작업(persist, merge, remove 등)을 연관된 다른 엔티티로 자동 전파하는 기능**입니다.
 
-> **Cascade**는 JPA에서 **한 엔티티의 상태 변경(persist, merge, remove 등)**이 **연관된 엔티티에도 함께 전파되도록** 설정하는 **전이(전파) 메커니즘**이다.
-
-즉, **연관관계의 주인(Owner)** 엔티티의 상태 변화가 **연관된 비주인(Non-Owner)** 엔티티에게 **자동으로 전파**되게 하여, 관련된 작업을 일일이 명시적으로 처리하지 않아도 되도록 한다.
+즉, 부모 엔티티에 어떤 작업을 하면, 자식 엔티티에게도 그 작업이 **자동으로 전달**되도록 해줍니다.
 
 ---
 
-## 🔍 2. 왜 필요한가?
+## ✅ Cascade의 적용 대상은?
+
+* **컬렉션(List, Set 등)을 포함하거나, 연관 엔티티를 참조하는 곳에만 설정할 수 있습니다.**
+* **연관관계의 주인/비주인 여부와 무관합니다.**
+
+  * ✔️ **중요 포인트**: `cascade`는 \*\*연관관계를 누가 관리하느냐(owner)\*\*와는 전혀 관계가 없습니다.
+  * ❗ 반대로 `mappedBy`는 반드시 **연관관계 주인에서만 생략 가능**하며, 연관관계를 어떻게 맵핑할지를 명시합니다.
+
+---
+
+## 💥 예제 코드: `Order` → `OrderItem`
 
 ```java
-em.persist(dept);
-em.persist(emp1);
-em.persist(emp2);
+@OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+private List<OrderItem> orderItems;
 ```
 
-위 코드는 `Department`와 두 `Employee`를 모두 저장해야 하지만, Cascade 설정이 되어 있다면:
+* `Order`에 `persist` 하면 `OrderItem`도 함께 `persist`됨
+* `Order`를 `remove`하면 `OrderItem`도 함께 `remove`됨
+
+즉, `cascade`는 다음처럼 동작합니다:
+
+| 작업                  | 설명                       |
+| ------------------- | ------------------------ |
+| `em.persist(order)` | `orderItems`도 자동 persist |
+| `em.merge(order)`   | `orderItems`도 자동 merge   |
+| `em.remove(order)`  | `orderItems`도 자동 remove  |
+| `em.detach(order)`  | `orderItems`도 detach     |
+| `em.refresh(order)` | `orderItems`도 DB에서 다시 로딩 |
+
+---
+
+## 🔎 Cascade 종류
+
+| 옵션                    | 설명                              |
+| --------------------- | ------------------------------- |
+| `CascadeType.PERSIST` | 부모가 `persist`될 때 자식도 `persist`  |
+| `CascadeType.MERGE`   | 부모가 `merge`될 때 자식도 `merge`      |
+| `CascadeType.REMOVE`  | 부모가 `remove`될 때 자식도 `remove`    |
+| `CascadeType.DETACH`  | 부모가 `detach`될 때 자식도 `detach`    |
+| `CascadeType.REFRESH` | 부모가 `refresh`될 때 자식도 DB에서 다시 조회 |
+| `CascadeType.ALL`     | 위의 모든 타입을 포함 (실무에서 가장 자주 사용됨)   |
+
+---
+
+## 🎯 핵심 정리: 주인과 cascade의 관계
+
+| 질문                            | 답변                                                             |
+| ----------------------------- | -------------------------------------------------------------- |
+| cascade는 연관관계의 주인만 설정할 수 있나요? | ❌ 아닙니다. 주인/비주인 관계와 무관합니다.                                      |
+| 그럼 누가 설정하나요?                  | 일반적으로 연관된 엔티티를 **소유하는 쪽**, 즉 **부모(Aggregate Root)** 에 설정합니다.   |
+| 왜 부모에 설정하나요?                  | 도메인 모델의 제어권이 **부모에 있기 때문입니다.** 예: `Order`가 `OrderItem`을 포함 관리함 |
+| mappedBy와는 다른가요?              | ✔️ `mappedBy`는 **연관관계 주인/비주인을 명시**, `cascade`는 **영속성 전이를 제어**  |
+
+---
+
+## 🧠 그림으로 이해하기
+
+```plaintext
+Order (비주인)
+ └── OrderItem (주인)
+
+[Order]         →     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+[OrderItem]     →     @ManyToOne @JoinColumn(name = "order_id")
+```
+
+* `Order`가 `persist`되면, 그 안의 `OrderItem`도 자동 `persist`
+* 단, `OrderItem`은 주인이므로 `@JoinColumn`으로 외래 키를 설정함
+
+---
+
+## 🧪 테스트 코드 예시
 
 ```java
-em.persist(dept); // 딱 한 줄로 전체 저장 가능!
-```
+Order order = new Order("고객A");
+order.addItem(new OrderItem("커피", 2));
+order.addItem(new OrderItem("케이크", 1));
 
-✅ **코드의 간결성**,
-✅ **엔티티 간의 생명주기 연결 유지**,
-✅ **트랜잭션 일관성** 유지에 유리
+em.persist(order); // orderItems도 자동 persist
 
----
-
-## ⚙️ 3. CascadeType 종류별 상세 설명
-
-| CascadeType | 설명                                                      |
-| ----------- | ------------------------------------------------------- |
-| **PERSIST** | 연관관계 주인을 `persist()`하면 비주인도 `persist()`됨                |
-| **MERGE**   | 연관관계 주인을 `merge()`하면 비주인도 `merge()`됨                    |
-| **REMOVE**  | 연관관계 주인을 `remove()`하면 비주인도 `remove()`됨                  |
-| **REFRESH** | 연관관계 주인을 `refresh()`하면 비주인도 `refresh()`됨 (DB 최신 상태로 갱신) |
-| **DETACH**  | 연관관계 주인을 `detach()`하면 비주인도 `detach()`됨 (1차 캐시에서 분리)     |
-| **ALL**     | 위 모든 동작 전이                                              |
-
-> 💡 `CascadeType.ALL` = `PERSIST + MERGE + REMOVE + REFRESH + DETACH`
-
----
-
-## 🧪 4. 실습 예제: CascadeType.ALL 적용
-
-### 📦 엔티티 설계
-
-```java
-@Entity
-public class Department {
-    @Id @GeneratedValue
-    private Long id;
-
-    private String name;
-
-    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
-    private List<Employee> employees = new ArrayList<>();
-
-    public void addEmployee(Employee emp) {
-        employees.add(emp);
-        emp.setDepartment(this); // 연관관계 설정
-    }
-    // getter/setter 생략
-}
-
-@Entity
-public class Employee {
-    @Id @GeneratedValue
-    private Long id;
-
-    private String name;
-
-    @ManyToOne
-    @JoinColumn(name = "department_id") // 연관관계 주인
-    private Department department;
-    // getter/setter 생략
-}
-```
-
-### 🧪 사용 코드
-
-```java
-em.getTransaction().begin();
-
-Department dept = new Department();
-dept.setName("Dev");
-
-Employee e1 = new Employee(); e1.setName("Alice");
-Employee e2 = new Employee(); e2.setName("Bob");
-
-dept.addEmployee(e1);
-dept.addEmployee(e2);
-
-em.persist(dept); // Employee까지 자동 저장됨
-em.getTransaction().commit();
+em.remove(order);  // orderItems도 자동 remove (orphanRemoval = true면 삭제됨)
 ```
 
 ---
 
-## 🔎 5. Hibernate 내부 동작 (SQL 로그)
+## 🚨 주의할 점
 
-Cascade가 없을 경우:
+1. **Cascade가 없으면**
 
-```sql
-insert into departments (name) values ('Dev');
--- 오류: employees는 저장되지 않음
-```
+   * `em.persist(order)`만으로는 `orderItems`가 DB에 저장되지 않음
+   * 각 `orderItem`도 `em.persist(item)`해야 함
 
-Cascade가 있을 경우 (`CascadeType.ALL`):
+2. **orphanRemoval = true**
 
-```sql
-insert into departments (name) values ('Dev');
-insert into employees (name, department_id) values ('Alice', 1);
-insert into employees (name, department_id) values ('Bob', 1);
-```
-
-Hibernate는 연관관계 주인을 저장할 때, `cascade` 설정을 보고 비주인 엔티티를 함께 저장합니다.
+   * 리스트에서 엔티티를 제거하면 실제 DB에서도 삭제됨
+   * **부모와의 관계가 끊어진 자식은 고아가 되므로 삭제**
 
 ---
 
-## 📘 6. JPA 스펙 관점에서 본 Cascade
+## ✅ 정리 요약
 
-JPA 스펙에서는 cascade에 대해 다음과 같이 정의합니다:
+| 요소         | 역할                              |
+| ---------- | ------------------------------- |
+| `cascade`  | 부모의 작업을 자식에게 **전파**             |
+| `mappedBy` | 연관관계의 **소유자(owner)** 를 명시       |
+| 설정 위치      | 일반적으로 도메인 제어권이 있는 **부모 쪽**에 설정  |
+| 주인과 무관?    | ✔️ 무관. 주인이 아니어도 `cascade` 설정 가능 |
 
-> When an operation is cascaded to a target entity, the same operation is invoked on the target entity (persist, merge, remove, refresh, detach). Cascading is not automatic by default and must be explicitly specified.
 
-즉, JPA는 연관된 엔티티의 **상태 변경 이벤트 전파를 위한 명시적 정책**을 제공하는 것입니다.
-
----
-
-## 🧠 7. 실무에서의 Cascade 사용 전략
-
-| 연관관계 종류               | 주인/비주인 구분     | 전이 설정 추천          | 이유                  |
-| --------------------- | ------------- | ----------------- | ------------------- |
-| Department - Employee | 주인: Employee  | `CascadeType.ALL` | 부서가 직원 생명주기를 소유     |
-| Order - OrderItem     | 주인: OrderItem | `CascadeType.ALL` | 주문이 주문상품을 완전 소유     |
-| Member - Address      | 주인: Address   | 없음 또는 `PERSIST`   | 주소는 회원 삭제와 관계없이 유지됨 |
-| Company - Employee    | 주인: Employee  | 신중하게 선택           | 직원은 독립적 생명주기를 가짐    |
-
-> ❗ `REMOVE`, `orphanRemoval = true`는 꼭 **연관관계 주인 필드**에 선언해야 정확하게 동작함
-
----
-
-## ❌ 8. Cascade 설정 시 흔한 실수
-
-### ① 연관관계 설정 안 하고 persist
-
-```java
-em.persist(dept); // emp.setDepartment(this) 안 했으면 오류 또는 무시됨
-```
-
-### ② 무한 루프 발생 가능
-
-```java
-// 양방향 관계에서 toString(), equals() 무한 순환 호출 주의!
-```
-
-### ③ orphanRemoval과 cascade 혼동
-
-```java
-@OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
-private List<Child> children;
-```
-
-| 설정               | 동작                                     |
-| ---------------- | -------------------------------------- |
-| `cascade=REMOVE` | 연관관계 주인을 삭제하면 비주인도 함께 삭제됨              |
-| `orphanRemoval`  | 연관관계에서 비주인을 제거하면 DB에서도 삭제됨 (detach 아님) |
-
----
-
-## 🧾 9. 요약 정리
-
-| 메서드 호출      | Cascade 설정       | 동작 설명             |
-| ----------- | ---------------- | ----------------- |
-| `persist()` | `PERSIST`, `ALL` | 연관된 비주인도 저장됨      |
-| `merge()`   | `MERGE`, `ALL`   | 비주인도 병합됨          |
-| `remove()`  | `REMOVE`, `ALL`  | 비주인도 삭제됨          |
-| `detach()`  | `DETACH`, `ALL`  | 비주인도 1차 캐시에서 분리됨  |
-| `refresh()` | `REFRESH`, `ALL` | 비주인도 DB 상태로 새로고침됨 |
-
----
-
-## 💡 마무리: 언제 Cascade를 쓰고 말아야 할까?
-
-* ✅ 생명주기를 **실제로 함께 관리해야 한다면** cascade를 사용하라.
-* ❗ 그렇지 않으면 **비주 엔티티는 직접 persist/merge/remove 하도록** 하라.
-* **REMOVE 전이**는 특히 조심해서 설정할 것 – 중요한 데이터가 연쇄 삭제될 수 있음.
-
-> 🎯 요약: cascade는 연관관계 주인/비주인 구분을 이해하고, 생명주기 의존성이 명확할 때만 사용하라!
