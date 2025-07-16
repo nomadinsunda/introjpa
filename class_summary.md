@@ -88,6 +88,8 @@ public class Profile {
   → 일반적으로 클라이언트에서 전달된 JSON 데이터를 담는 DTO.
   → 필드 예시: `String phone`, `int options`
 
+
+
 ---
 
 ### ✅ 정리
