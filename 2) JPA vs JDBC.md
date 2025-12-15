@@ -103,12 +103,4 @@ JPA는 단순히 **코드를 줄이기 위한 도구**가 아니라, 자바라�
 ✅ DB 독립성 확보
 ✅ 유지보수성과 확장성 향상
 
----
-
-## 📎 다음 주제 예고
-
-* 🧱 JPA의 기본 구성 요소(Entity, EntityManager, PersistenceContext)
-* 🛠️ JPA 엔티티 설계 방법 및 ID 전략
-* 🔄 Fetch 전략 (Lazy vs Eager)
-* 💡 JPQL과 Criteria API 마스터하기
 
