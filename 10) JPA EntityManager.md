@@ -6,6 +6,8 @@ Java Persistence API(JPA)의 핵심 컴포넌트인 `EntityManager`는 영속성
 
 ## 📌 주요 기능별 분류 및 메서드 상세 설명
 
+![EntityManager](https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/img/entitymanager.png)
+
 ### 1. 트랜잭션 관리 (Transaction Association)
 
 | 메서드                                  | 설명                                                                                  |
