@@ -8,6 +8,7 @@ JPA에서는 Entity 객체가 단순히 생성되고 저장되는 것을 넘어,
 ---
 
 ## 📌 JPA의 3대 Entity 상태
+![Entity lifecycle](https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/img/jpa-state-transitions.png)
 
 | 상태                  | 설명                                        |
 | ------------------- | ----------------------------------------- |
@@ -15,10 +16,9 @@ JPA에서는 Entity 객체가 단순히 생성되고 저장되는 것을 넘어,
 | **Managed (영속)**    | Persistence Context에 포함되어 JPA가 관리하는 객체    |
 | **Detached (준영속)**  | 원래 영속 상태였다가, Persistence Context에서 분리된 객체 |
 
-![Entity lifecycle](https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/img/jpa-state-transitions.png)
+
 
 JPA는 이 외에도 "Removed" 상태를 **임시 상태**로 분류하지만, 이는 실제 상태라기보다는 "삭제 예약됨" 상태로 취급됩니다.
-<img src="./images/jpa-entity-lifecycle-0.png" width=90% /><br>
 ---
 
 ## 🧭 전체 흐름도
