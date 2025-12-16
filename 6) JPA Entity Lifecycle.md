@@ -237,3 +237,20 @@ Persistence Context는 JPA의 **1차 캐시**이자 **Entity 상태 관리자**�
 **상태 전이는 대부분 `EntityManager`의 메서드를 통해 수행되며,
 그 시점과 방법을 명확히 이해하는 것이 실무의 핵심입니다.**
 
+
+
+```
+graph TD
+    subgraph Persistence Context (영속성 컨텍스트)
+        A[1차 캐시: Map<PK, Entity>] -- 조회/쓰기 --> B(쓰기 지연 SQL 저장소);
+        A -- 엔티티 상태 비교 --> C(스냅샷 저장소);
+        B -- Flush 시 --> D(JDBC / 데이터베이스);
+    end
+
+    E[EntityManager.persist()] --> A;
+    F[EntityManager.find(PK)] --> A;
+    G[트랜잭션 commit()] --> H(Flush);
+    H --> B;
+    B --> D;
+```
+
