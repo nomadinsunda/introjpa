@@ -7,6 +7,7 @@
 ## 🟡 1. JPA란 무엇인가?
 
 JPA(Java Persistence API)는 자바 객체와 데이터베이스 테이블 간의 **매핑(Mapping)** 을 담당하는 **ORM(Object-Relational Mapping)** 기술입니다.
+다음 이미지는 JPA 아키텍쳐의 주요 컴포넌트들간의 관계를 보여주고 있습니다.
 
 ![The diagram below illustrates the relationships between the primary components of the JPA architecture.](https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/img/jpa-arch.png)
 
