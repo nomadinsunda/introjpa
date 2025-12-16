@@ -164,6 +164,6 @@ JPA는 단순히 ORM 기술 그 이상입니다. 객체 지향 프로그래밍�
 
 * JPA 공식 스펙: [https://jakarta.ee/specifications/persistence](https://jakarta.ee/specifications/persistence)
 * Hibernate 공식 문서: [https://hibernate.org](https://hibernate.org)
-* openjpa : [https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/manual.html#jpa_overview_meta_manytoone]
+* openjpa : [https://openjpa.apache.org/builds/1.2.3/apache-openjpa/docs/manual.html#introduction]
 
 
