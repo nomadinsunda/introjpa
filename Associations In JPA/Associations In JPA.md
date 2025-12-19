@@ -42,6 +42,7 @@ DB 팀은 기본 키와 외래 키 제약 조건을 활용하여 관계를 갖�
 | **Unidirectional** | 연관된 객체를 **한 쪽**에서만 접근 가능 |
 | **Bidirectional**  | 양쪽 모두 연관 객체를 접근 가능       |
 
+단방향(Unidirectional) 케이스
 ```java
 @Entity
 public class Order {
