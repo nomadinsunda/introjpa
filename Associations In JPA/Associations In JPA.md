@@ -54,7 +54,6 @@ public class Order {
     
 }
 
-
 @Entity
 public class OrderItem {
 
@@ -69,10 +68,10 @@ public class OrderItem {
     @JoinColumn(name = "order_id")
     private Order order;
 }
-
 ```
 
 양방향 케이스
+
 ```
 @Entity
 public class Order {
@@ -90,7 +89,6 @@ public class Order {
         item.setOrder(this); // 주인 쪽에 설정
     }
 }
-
 
 @Entity
 public class OrderItem {
