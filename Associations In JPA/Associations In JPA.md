@@ -51,13 +51,43 @@ public class Order {
     @GeneratedValue
     private Long id;
 
-    @OneToMany
-    @JoinColumn(name = "order_id") // ORDER_ITEM 테이블에 FK 생성
+    
+}
+
+
+@Entity
+public class OrderItem {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String productName;
+    private int price;
+
+    @ManyToOne
+    @JoinColumn(name = "order_id")
+    private Order order;
+}
+
+```
+
+양방향 케이스
+```
+@Entity
+public class Order {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    @OneToMany(mappedBy = "order")
     private List<OrderItem> orderItems = new ArrayList<>();
 
-    // 연관관계 편의 메서드
+    // 연관관계 편의 메서드 (중요)
     public void addOrderItem(OrderItem item) {
         orderItems.add(item);
+        item.setOrder(this); // 주인 쪽에 설정
     }
 }
 
@@ -71,6 +101,14 @@ public class OrderItem {
 
     private String productName;
     private int price;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id") // FK 관리
+    private Order order;
+
+    public void setOrder(Order order) {
+        this.order = order;
+    }
 }
 
 ```
