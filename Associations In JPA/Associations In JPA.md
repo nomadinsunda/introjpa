@@ -43,26 +43,35 @@ DB 팀은 기본 키와 외래 키 제약 조건을 활용하여 관계를 갖�
 | **Bidirectional**  | 양쪽 모두 연관 객체를 접근 가능       |
 
 ```java
-// Unidirectional OneToMany
-class User {
+@Entity
+public class Order {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
     @OneToMany
-    private List<PhoneNumber> phoneNumbers;
+    @JoinColumn(name = "order_id") // ORDER_ITEM 테이블에 FK 생성
+    private List<OrderItem> orderItems = new ArrayList<>();
+
+    // 연관관계 편의 메서드
+    public void addOrderItem(OrderItem item) {
+        orderItems.add(item);
+    }
 }
 
-class PhoneNumber {
-    
-    private User user;
+
+@Entity
+public class OrderItem {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String productName;
+    private int price;
 }
 
-// Bidirectional
-class User {
-    @OneToMany(mappedBy = "user")
-    private List<PhoneNumber> phoneNumbers;
-}
-class PhoneNumber {
-    @ManyToOne
-    private User user;
-}
 ```
 
 ---
