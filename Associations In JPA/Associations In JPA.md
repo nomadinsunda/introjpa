@@ -1,5 +1,5 @@
 
-# 📌 Association Mapping in JPA: 관계형 DB → 객체 지향 매핑 완전 정복
+# 📌 Association Mapping in JPA: 관계형 DB → 객체 지향 매핑
 
 ## 🔍 개요: 왜 Association Mapping이 필요한가?
 DB 설계 팀은 "정규화 규칙"에 따라 프로젝트의 테이블을 설계합니다. 
