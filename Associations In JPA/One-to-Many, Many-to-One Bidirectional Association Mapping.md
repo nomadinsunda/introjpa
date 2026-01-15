@@ -1,375 +1,502 @@
 # 🔄 JPA One-to-Many, Many-to-One 양방향 연관관계 매핑
 
-## 📌 1. 연관관계 개요
+JPA의 `One-to-Many / Many-to-One 양방향 매핑`은
+말 그대로 **“두 세계를 동시에 설계하는 일”** 입니다.
+객체 세계(컬렉션 + 참조)와 RDB 세계(FK + JOIN)를 **객체 세계와 DB 세계가 서로 “일치하는 상태”** 해야 합니다.
 
-JPA에서 양방향 연관관계란, **양쪽 엔티티 모두가 서로를 참조**하고 있는 관계입니다. 예를 들어, 하나의 `Department`는 여러 명의 `Employee`를 가질 수 있고, 각 `Employee`는 자신이 속한 `Department`를 알 수 있습니다.
-
-### ✅ 기본 개념
-
-* `@OneToMany(mappedBy = "...")`: **연관관계의 주인이 아님**, 읽기 전용
-* `@ManyToOne`: **연관관계의 주인**, 외래키(FK)를 가진 쪽
-
-> 외래키는 항상 `Many` 쪽에 존재하며, 따라서 **`@ManyToOne`이 연관관계의 주인**입니다.
 
 ---
 
-#### 🔑 연관관계의 주인이란?
+# 1. 왜 양방향 연관관계가 필요한가? 🤔
 
-**연관관계의 주인(owning side)** 이란 **데이터베이스 외래 키(Foreign Key)의 위치를 기준으로**, JPA가 **연관관계를 관리하는 주체**를 의미합니다.
+먼저 질문부터 시작하겠습니다.
 
-##### ✅ 즉, 연관관계의 주인은 “누가 외래 키를 가지고 있느냐?”에 따라 결정됩니다.
+> “정말 양방향이 필요한가? Many-to-One 단방향이면 안 되나?”
+
+사실 **대부분의 비즈니스 요구는 Many-to-One만으로도 충분**합니다.
+그럼에도 양방향을 쓰는 이유는:
+
+* **양쪽 방향 탐색이 필요**할 때
+
+  * 예: `Order`에서 `orderItems`를 보고 싶고
+  * `OrderItem`에서 `order`도 보고 싶을 때
+* 컬렉션 기반으로 조회/조작하는 코드가 자연스러운 도메인
+
+  * 예: `order.getOrderItems().add(...)` 같은 코드
+
+즉, 양방향은 “조회/연관 데이터 탐색”을 더 자연스럽게 만들지만,
+대신 **연관관계 주인, 동기화, 무한 루프, equals/hashCode** 같은 복잡성이 따라옵니다. ⚠️
 
 ---
 
-##### 🎯 예제로 이해하기
+# 2. 예제 도메인 설계: Order ↔ OrderItem 🧾
 
-###### 📌 연관관계 예: Department(1) ↔ Employee(N)
+가장 대표적인 케이스는 다음과 같은 구조입니다.
+
+* 하나의 **주문(Order)** 에 여러 개의 **주문 상품(OrderItem)** 이 있다.
+* `OrderItem`은 반드시 어떤 `Order`에 속해야 한다.
+
+## 2.1 개념 관계
+
+* 객체 모델
+
+```text
+Order 1  ---  * OrderItem
+
+Order       ↔      OrderItem
+  - orderItems     - order
+```
+
+* DB 모델
+
+```text
+ORDER_ITEM.ORDER_ID (FK) → ORDER.ID
+```
+
+즉, 외래키는 항상 **N쪽(다)**인 `ORDER_ITEM` 테이블에 존재합니다.
+
+---
+
+## 2.2 데이터베이스 스키마 (MySQL) 🗃️
+
+```sql
+CREATE TABLE ORDERS (
+    ID          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    ORDER_NO    VARCHAR(50) NOT NULL,
+    ORDER_DATE  DATETIME NOT NULL
+);
+
+CREATE TABLE ORDER_ITEM (
+    ID          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    PRODUCT_NAME VARCHAR(100) NOT NULL,
+    PRICE       INT NOT NULL,
+    QUANTITY    INT NOT NULL,
+    ORDER_ID    BIGINT NOT NULL,
+    CONSTRAINT FK_ORDER_ITEM_ORDER
+        FOREIGN KEY (ORDER_ID) REFERENCES ORDERS(ID)
+);
+```
+
+* `ORDER_ITEM.ORDER_ID`가 FK이자 연관관계의 **실제 소유자(물리)** 입니다.
+
+---
+
+# 3. 엔티티 매핑 코드 🧩
+
+## 3.1 OrderItem – ManyToOne, 연관관계의 “주인” 🧷
 
 ```java
-@Entity
-@Table(name = "departments")
-public class Department {
+import jakarta.persistence.*;
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+@Entity
+@Table(name = "ORDER_ITEM")
+public class OrderItem {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name;
+    private String productName;
+    private int price;
+    private int quantity;
 
-    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
-    private List<Employee> employees = new ArrayList<>();
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "ORDER_ID", nullable = false)
+    private Order order;  // 🔥 연관관계의 주인(Owner)
+
+    protected OrderItem() {}
+
+    public OrderItem(String productName, int price, int quantity, Order order) {
+        this.productName = productName;
+        this.price = price;
+        this.quantity = quantity;
+        this.changeOrder(order);  // 편의 메서드 사용
+    }
+
+    // 연관관계 편의 메서드
+    public void changeOrder(Order order) {
+        // 기존 연관관계 제거
+        if (this.order != null) {
+            this.order.getOrderItems().remove(this);
+        }
+        this.order = order;
+        if (order != null && !order.getOrderItems().contains(this)) {
+            order.getOrderItems().add(this);
+        }
+    }
+
+    // Getter/Setter 생략
 }
 ```
 
-```java
-@Entity
-@Table(name = "employees")
-public class Employee {
+### 🧠 포인트
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+* `@ManyToOne` + `@JoinColumn` 을 가진 `OrderItem.order`가 **연관관계 주인**
 
-    private String name;
-
-    @ManyToOne
-    @JoinColumn(name = "department_id") // FK
-    private Department department;
-}
-```
-
-* `Employee`이 **외래 키(department_id)를 보유**하므로, JPA 입장에서 `Employee.department`가 **연관관계의 주인**입니다.
-* 반대로 `Department.employees`는 **주인이 아닌 inverse side(비주인 또는 반대편)**입니다.
+  * **FK를 직접 변경**하는 곳이기 때문
+* `fetch = LAZY`는 필수 수준으로 권장 (N+1 방지 전략과 함께 사용)
+* `changeOrder()`는 **양방향 관계 동기화**를 위한 “편의 메서드”
 
 ---
 
-#### 🔧 연관관계의 주인이 중요한 이유
-
-JPA는 연관관계 저장 시, **연관관계의 주인 필드만을 기준으로 외래 키를 갱신**합니다.
-
-예를 들어 아래와 같은 코드:
+## 3.2 Order – OneToMany, 읽기 전용 컬렉션 🧺
 
 ```java
-Department department = new Department();
-department.setName("개발부");
-
-Employee employee = new Employee();
-employee.setName("홍길동");
-
-//employee.setDepartment(department); // DB 반영 됨.
-
-department.getEmployees().add(employee); // ❌ 주인이 아님. DB 반영 안 됨
-
-em.persist(department);
-em.persist(employee);
-
-```
-
-이 코드는 **DB에 외래 키가 null로 저장**될 수 있습니다.
-왜냐하면 `department`는 주인이 아니므로, 아무리 값을 설정해도 JPA는 **무시**하기 때문입니다.
-
----
-
-#### 📌 정리: 연관관계의 주인이란?
-
-| 개념          | 설명                                    |
-| ----------- | ------------------------------------- |
-| 🔑 연관관계의 주인 | 외래 키를 가진 쪽, JPA가 연관관계 변경 시 기준으로 삼는 필드 |
-| 📍 위치       | 항상 `@ManyToOne` 쪽이 주인 (외래 키가 존재하므로)   |
-| 🧭 설정 방법    | `@JoinColumn`이 있는 쪽이 주인               |
-| 🚫 주인이 아닌 쪽 | `mappedBy` 속성으로 주인을 지정함. DB에 직접 관여 X  |
-
----
-
-#### 💡 추가 팁
-
-* `@OneToOne`, `@ManyToMany`도 주인을 명시적으로 설정해주어야 합니다.
-* 실수로 주인이 아닌 쪽만 수정하면, **DB에 반영되지 않거나 예외가 발생**할 수 있습니다.
-
----
-
-
-#### ✅ 연관관계 편의 메서드란?
-
-**연관관계 편의 메서드**는 JPA의 양방향 연관관계에서 **양쪽 값을 동시에 세팅**해 주는 사용자 정의 메서드입니다.
-
-```java
-public void addEmployee(Employee employee) {
-    employees.add(employee);           // (1) List에 추가
-    employee.setDepartment(this);     // (2) 반대 방향도 세팅
-}
-```
-
-이 메서드는 `Department` ↔ `Employee` 간의 양방향 관계를 **일관성 있게 유지**해 주는 도우미입니다.
-
----
-
-##### 📌 왜 필요한가?
-
-양방향 연관관계는 두 객체가 서로를 참조하므로, **연관관계를 한쪽만 설정하면 데이터 불일치**가 생길 수 있습니다.
-
-##### ❌ 한쪽만 설정할 경우:
-
-```java
-Employee emp = new Employee();
-emp.setDepartment(dept);      // 반대쪽 설정 안 함
-
-dept.getEmployees().size();   // ➡️ 0 (논리적으로는 포함됐지만, 실제 리스트에는 없음)
-```
-
-* `Employee.department`는 설정되었지만,
-* `Department.employees`에는 반영되지 않음 → 메모리 상의 불일치
-
-##### ✅ 양쪽을 모두 설정할 경우:
-
-```java
-dept.addEmployee(emp); // 편의 메서드 사용
-```
-
-* `Employee.department`도,
-* `Department.employees`도 동시에 연결 → 객체 그래프 일관성 유지
-
----
-
-##### 🧠 JPA 관점에서 중요성
-
-JPA는 연관관계의 주인만 DB의 외래키를 관리하지만, **객체는 쌍방 참조 구조를 유지해야 논리적 오류가 안 생깁니다.**
-
-예를 들어,
-
-```java
-order.getOrderItems().add(item); // 주인이 아니므로 DB에 반영 X
-```
-
-이런 코드는 **객체 그래프는 연결됐지만**, **DB에는 반영되지 않는 문제**를 유발합니다.
-
----
-
-##### 📝 정리
-
-| 항목          | 설명                                          |
-| ----------- | ------------------------------------------- |
-| ❓ 정의        | 양방향 연관관계에서 양쪽을 동시에 설정해주는 사용자 메서드            |
-| 🎯 목적       | 객체 그래프의 **일관성 유지**, 데이터 불일치 방지              |
-| 🛠 사용 방법    | 연관관계 설정 시 `addXxx()` 메서드를 통해 양쪽 필드 설정       |
-| 🔐 JPA 주의사항 | JPA는 연관관계의 **주인만 DB 반영**, 하지만 양쪽 설정은 **필수** |
-
----
-
-##### 📌 Best Practice
-
-```java
-// 연관관계 주인 쪽만 설정하는 건 ❌
-employee.setDepartment(dept);
-
-// 항상 편의 메서드 사용이 권장됨 ✅
-dept.addEmployee(employee);  // 내부에서 setDepartment 호출 포함
-```
-
-## 📁 2. 예제 프로젝트 구조
-
-* JPA 구현체: Hibernate
-* DB: H2 또는 MySQL
-* JavaSE 환경에서 JPA API만 사용 (Spring 미사용)
-
-```
-src/
- ├── model/
- │    ├── Department.java
- │    └── Employee.java
- ├── persistence.xml
- └── Main.java
-```
-
----
-
-## 🧱 3. Entity 설계
-
-### ✅ Department.java
-
-```java
-package model;
-
-import javax.persistence.*;
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "departments")
-public class Department {
+@Table(name = "ORDERS")
+public class Order {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name;
+    private String orderNo;
 
-    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
-    private List<Employee> employees = new ArrayList<>();
+    private LocalDateTime orderDate;
 
-    // === 연관관계 편의 메서드 ===
-    public void addEmployee(Employee employee) {
-        employees.add(employee);
-        employee.setDepartment(this);
+    @OneToMany(
+        mappedBy = "order",
+        cascade = CascadeType.ALL,
+        orphanRemoval = true
+    )
+    private List<OrderItem> orderItems = new ArrayList<>();
+
+    protected Order() {}
+
+    public Order(String orderNo) {
+        this.orderNo = orderNo;
+        this.orderDate = LocalDateTime.now();
     }
 
-    // Getters/Setters
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public List<Employee> getEmployees() { return employees; }
+    // 연관관계 편의 메서드
+    public void addOrderItem(OrderItem orderItem) {
+        orderItems.add(orderItem);
+        orderItem.changeOrder(this);  // 양쪽 동기화 🔁
+    }
+
+    public void removeOrderItem(OrderItem orderItem) {
+        orderItems.remove(orderItem);
+        orderItem.changeOrder(null);  // 관계 끊기
+    }
+
+    // Getter 생략
 }
 ```
 
+### 🧠 포인트
+
+* `mappedBy = "order"`
+
+  * “**이 컬렉션은 연관관계 주인이 아니다.** FK는 `OrderItem.order`가 관리한다.”
+* `cascade = CascadeType.ALL`
+
+  * `Order`를 `persist()` 하면 `OrderItem`도 함께 저장
+* `orphanRemoval = true`
+
+  * `orderItems`에서 제거된 `OrderItem`은 **고아 객체**로 보고 자동 삭제(DELETE)
+
 ---
 
-### ✅ Employee.java
+# 4. 양방향에서 가장 중요한 개념: 연관관계의 주인 ⚖️
+
+> **양방향이라고 해서 FK를 양쪽이 다 변경하면 안 됩니다.**
+> JPA는 내부적으로 **“연관관계의 주인(Owner)”만 믿습니다.**
+
+* 연관관계 주인:
+
+  * **FK를 가진 엔티티의 필드**
+  * 여기서는 `OrderItem.order`
+* `mappedBy`가 붙은 반대편:
+
+  * DB FK를 직접 변경할 수 **없다**
+  * `Order.orderItems`는 **읽기 전용 뷰에 가깝다**
+
+즉, 아래 둘 중에서 **JPA가 믿는 것은 Only #1**입니다.
+
+1. `orderItem.setOrder(order);`  ✅ (FK 변경)
+2. `order.getOrderItems().add(orderItem);` ❌ (주인 아닌 쪽만 변경)
+
+그래서 실무에서 필수인 것이 바로 **연관관계 편의 메서드**입니다. 🔧
+
+---
+
+# 5. 연관관계 편의 메서드 설계 🛠️
+
+양방향일 때 안전한 코드는 항상 **“양쪽 컬렉션/참조를 동시에 일관되게”** 맞춰야 합니다.
+
+### 5.1 Order 쪽 편의 메서드
 
 ```java
-package model;
-
-import javax.persistence.*;
-
-@Entity
-@Table(name = "employees")
-public class Employee {
-
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String name;
-
-    @ManyToOne
-    @JoinColumn(name = "department_id") // FK
-    private Department department;
-
-    // Getters/Setters
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+public void addOrderItem(OrderItem orderItem) {
+    orderItems.add(orderItem);
+    orderItem.changeOrder(this);
 }
 ```
 
----
+* 항상 **한 메서드에서 양쪽을 모두 조작**하도록 강제
 
-## ⚙ 4. persistence.xml
-
-```xml
-<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
-             version="3.0">
-    <persistence-unit name="jpa-example">
-        <class>model.Department</class>
-        <class>model.Employee</class>
-
-        <properties>
-            <property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver"/>
-            <property name="jakarta.persistence.jdbc.url" value="jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1"/>
-            <property name="jakarta.persistence.jdbc.user" value="sa"/>
-            <property name="jakarta.persistence.jdbc.password" value=""/>
-            
-            <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect"/>
-            <property name="hibernate.hbm2ddl.auto" value="create-drop"/>
-            <property name="hibernate.show_sql" value="true"/>
-            <property name="hibernate.format_sql" value="true"/>
-        </properties>
-    </persistence-unit>
-</persistence>
-```
-
----
-
-## 🧪 5. 테스트 코드
+### 5.2 OrderItem.changeOrder()
 
 ```java
-import model.Department;
-import model.Employee;
-
-import javax.persistence.*;
-
-public class Main {
-
-    public static void main(String[] args) {
-        EntityManagerFactory emf = Persistence.createEntityManagerFactory("jpa-example");
-        EntityManager em = emf.createEntityManager();
-
-        em.getTransaction().begin();
-
-        Department dept = new Department();
-        dept.setName("Engineering");
-
-        Employee emp1 = new Employee();
-        emp1.setName("Alice");
-
-        Employee emp2 = new Employee();
-        emp2.setName("Bob");
-
-        // 연관관계 편의 메서드로 양방향 설정
-        dept.addEmployee(emp1);
-        dept.addEmployee(emp2);
-
-        em.persist(dept); // cascade 덕분에 Employee도 저장됨
-
-        em.getTransaction().commit();
-
-        // 조회 테스트
-        Department found = em.find(Department.class, dept.getId());
-        System.out.println("Department: " + found.getName());
-        found.getEmployees().forEach(e ->
-                System.out.println("Employee: " + e.getName()));
-
-        em.close();
-        emf.close();
+public void changeOrder(Order order) {
+    if (this.order != null) {
+        this.order.getOrderItems().remove(this);
+    }
+    this.order = order;
+    if (order != null && !order.getOrderItems().contains(this)) {
+        order.getOrderItems().add(this);
     }
 }
 ```
 
+* 기존 연관관계 제거 → 새 연관관계 연결
+* **사이드 이펙트 최소화** + **양방향 컬렉션 정합성 보장**
+
 ---
 
-## 📊 6. 출력 로그 분석
+# 6. 실제 SQL 흐름 보기 🧾
+
+아래 코드가 있을 때:
+
+```java
+em.getTransaction().begin();
+
+Order order = new Order("ORD-2026-0001");
+
+OrderItem item1 = new OrderItem("Laptop", 1200000, 1, order);
+OrderItem item2 = new OrderItem("Mouse", 20000, 2, order);
+
+order.addOrderItem(item1);
+order.addOrderItem(item2);
+
+em.persist(order);  // CascadeType.ALL 덕분에 item도 같이 persist
+
+em.getTransaction().commit();
+```
+
+일반적인 Hibernate SQL:
+
+1. `Order` INSERT
 
 ```sql
-insert into departments (name) values (?)
-insert into employees (department_id, name) values (?, ?)
-insert into employees (department_id, name) values (?, ?)
+insert into ORDERS (order_no, order_date) 
+values ('ORD-2026-0001', '2026-01-15 17:30:00');
+```
 
-select * from departments where id=?
-select * from employees where department_id=?
+2. `OrderItem` INSERT
+
+```sql
+insert into ORDER_ITEM (product_name, price, quantity, order_id)
+values ('Laptop', 1200000, 1, 1);
+
+insert into ORDER_ITEM (product_name, price, quantity, order_id)
+values ('Mouse', 20000, 2, 1);
+```
+
+💡 **중요**
+
+* `OrderItem`(연관관계 주인)이 FK를 가지고 있으므로
+  `OneToMany 단방향`에서처럼 **추가 UPDATE 쿼리가 발생하지 않습니다.**
+* 이것이 ManyToOne/OneToMany 양방향 구조가 **성능/정합성 측면에서 훨씬 우수**한 이유입니다. ✅
+
+---
+
+# 7. orphanRemoval과 cascade – 생명주기 관리 🌱
+
+양방향 연관관계의 진가는 **Aggregate Root 패턴**과 결합될 때 나옵니다.
+
+* `Order`가 Aggregate Root
+* `OrderItem`은 `Order` 안에서만 존재하는 종속 엔티티(Child)
+
+이때:
+
+```java
+@OneToMany(
+    mappedBy = "order",
+    cascade = CascadeType.ALL,
+    orphanRemoval = true
+)
+private List<OrderItem> orderItems = new ArrayList<>();
+```
+
+의 의미:
+
+* `cascade = ALL`
+
+  * `persist(order)` → `orderItems` 전체 `persist`
+  * `remove(order)` → `orderItems` 전체 `remove`
+* `orphanRemoval = true`
+
+  * `order.getOrderItems().remove(item)` → DB에서 해당 `ORDER_ITEM` `DELETE`
+
+즉, **“Order 컬렉션에서 빠지면 그 자체로 삭제”**라는 도메인 룰을 JPA에 위임하는 것입니다. 🧹
+
+---
+
+# 8. Fetch 전략 & N+1 문제 📡
+
+양방향 관계에서는 fetch 전략 설계도 매우 중요합니다.
+
+## 8.1 ManyToOne 기본 Fetch
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+private Order order;
+```
+
+* JPA 기본은 `EAGER`지만, **실무에서는 무조건 LAZY를 명시**하는 것이 좋습니다.
+* 양방향 구조에서 EAGER가 서로 참조하면 **순환 로딩 + 쿼리 폭발**이 생기기 쉽습니다.
+
+## 8.2 OneToMany Fetch
+
+* `@OneToMany`의 기본 fetch 전략은 `LAZY`입니다.
+* 컬렉션은 대부분 LAZY를 유지하고,
+  필요할 때 **fetch join** 또는 `@BatchSize`, `default_batch_fetch_size`로 최적화합니다.
+
+### 예: fetch join으로 한 번에 조회
+
+```java
+List<Order> orders = em.createQuery(
+    "select o from Order o join fetch o.orderItems",
+    Order.class
+).getResultList();
+```
+
+→ SQL:
+
+```sql
+select o.*, oi.* 
+from ORDERS o
+join ORDER_ITEM oi on o.id = oi.order_id;
 ```
 
 ---
 
-## 🧠 7. 정리 및 주의 사항
+# 9. 양방향 매핑에서 자주 터지는 문제들 ⚠️
 
-| 항목            | 설명                                     |
-| ------------- | -------------------------------------- |
-| 연관관계 주인       | `Employee` (외래키 가짐)                    |
-| 연관관계 설정 위치    | `Employee.department`에 `@ManyToOne` 사용 |
-| `mappedBy` 용도 | `Department.employees`는 읽기 전용 역할       |
-| 양방향 설정 방법     | `addEmployee()` 같은 편의 메서드 활용           |
-| 성능            | 지연 로딩 (`LAZY`) 기본, 필요시 명시 변경           |
+## 9.1 무한 루프 (toString, JSON 직렬화) ♻️
 
+```java
+public class Order {
+    // ...
+    @OneToMany(mappedBy = "order")
+    private List<OrderItem> orderItems;
+}
 
+public class OrderItem {
+    // ...
+    @ManyToOne
+    private Order order;
+}
+```
 
-## 📝 결론
+`toString()` 또는 Jackson 직렬화 시:
 
-JPA의 One-to-Many ↔ Many-to-One 양방향 연관관계는 **객체지향적 모델링과 관계형 데이터베이스 설계의 간극을 메우는 핵심 요소**입니다. 특히 편의 메서드를 통해 양방향 연관관계를 유지하는 것이 핵심이며, 항상 연관관계의 주인을 기준으로 데이터 변경이 이루어지도록 코드를 구성해야 합니다.
+* `Order.toString()` → `orderItems` 출력
+* `OrderItem.toString()` → `order` 출력
+* 서로 계속 참조 → **StackOverflowError** / JSON 무한 객체 트리
+
+### 해결 방법
+
+* `toString()`에서 연관 엔티티를 출력하지 않거나
+* Jackson 사용할 때:
+
+  * `@JsonManagedReference` / `@JsonBackReference`
+  * 또는 `@JsonIgnore` / DTO 변환 계층 도입
+
+---
+
+## 9.2 equals / hashCode 설계 지옥 🧨
+
+양방향 + 컬렉션까지 들어가는 상황에서
+`equals` / `hashCode`에 연관 엔티티를 포함하면:
+
+* 무한 순환 비교
+* 프록시 초기화
+* HashSet, HashMap에서 이상한 동작
+
+**권장 패턴:**
+
+* `@Entity`의 `equals/hashCode`는 **가능하면 PK 기반**
+* 새 엔티티(아직 PK 없음)일 때는 주의가 필요하지만,
+  실무에서는 보통 ID가 있는 상태(영속/준영속)에서만 비교
+
+```java
+@Override
+public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Order)) return false;
+    Order other = (Order) o;
+    return id != null && id.equals(other.id);
+}
+
+@Override
+public int hashCode() {
+    return 31;
+}
+```
+
+---
+
+# 10. 실무에서의 베스트 프랙티스 체크리스트 ✅
+
+마지막으로 JPA 양방향 매핑 설계 시
+실무에서 통용되는 “체크리스트”를 정리해 보겠습니다.
+
+### ✅ 1) 양방향은 “정말 필요할 때만” 사용
+
+* 대부분은 ManyToOne 단방향만으로도 충분
+* 무조건 양방향부터 열지 말 것
+
+### ✅ 2) 연관관계 주인은 FK를 가진 쪽
+
+* 항상 `ManyToOne`이 주인
+* `OneToMany(mappedBy = ...)`는 읽기 전용 뷰
+
+### ✅ 3) 연관관계 편의 메서드 필수
+
+* 한쪽에서만 add/remove를 허용하고,
+  **그 안에서 양쪽 엔티티를 동시에 갱신**하도록 설계
+
+```java
+order.addOrderItem(item);
+```
+
+### ✅ 4) Fetch 전략은 **LAZY가 기본값**
+
+* 필요 시 `fetch join` / `batch fetch`로 최적화
+* EAGER는 정말 특수한 경우 외에는 지양
+
+### ✅ 5) Aggregate Root 기준으로 cascade/orphanRemoval 사용
+
+* `Order`가 Root라면 `orderItems`에 `cascade = ALL`, `orphanRemoval = true`를 자연스럽게 적용
+* 반대로 연관 엔티티를 여러 Aggregate에서 공유한다면 조심해서 사용
+
+### ✅ 6) toString / equals / hashCode에서 연관 필드 배제
+
+* DTO 계층 도입으로 도메인 엔티티의 표현/전송 책임을 분리하는 것이 이상적
+
+---
+
+# ⛳ 마무리: 양방향 매핑은 “도메인 설계 + 인프라 설계”의 교차점
+
+정리하면,
+
+* `OneToMany / ManyToOne 양방향`은
+  **도메인 모델의 탐색 편의성**과 **RDB FK 구조**를 동시에 만족시키기 위한 강력한 도구입니다.
+* 다만,
+
+  * 연관관계 주인
+  * 편의 메서드
+  * fetch 전략
+  * 생명주기(cascade, orphanRemoval)
+  * 직렬화/표현(toString, JSON, equals/hashCode)
+
+  를 함께 고려하지 않으면 **곧바로 유지보수 지옥**에 빠질 수 있습니다. 😈
+
 
