@@ -25,11 +25,11 @@ int updated = ps.executeUpdate();
 ResultSet rs = ps.getGeneratedKeys();
 ```
 
-질문 핵심은 이거죠:
+이번 챕터의 핵심 내용은: <br>
 
-> 1️⃣ `Statement.RETURN_GENERATED_KEYS`는 SQL에 붙지도 않는데
-> 2️⃣ DB 서버는 어떻게 “키 돌려줘야 하는지” 알고
-> 3️⃣ 그 키를 다시 JDBC에서 `ResultSet`으로 만들어주는가?
+> 1️⃣ `Statement.RETURN_GENERATED_KEYS`는 SQL에 붙지도 않는데 <br>
+> 2️⃣ DB 서버는 어떻게 “키 돌려줘야 하는지” 알고 <br>
+> 3️⃣ 그 키를 다시 JDBC에서 `ResultSet`으로 만들어주는가? <br>
 
 이걸 단계별로 뜯어보겠습니다. 🧵
 
